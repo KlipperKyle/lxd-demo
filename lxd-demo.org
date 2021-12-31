@@ -1,0 +1,484 @@
+# -*- mode: org; indent-tabs-mode: nil; -*-
+#+title: LXD Demo
+#+author: Kyle Terrien
+#+options: ^:{}
+
+* What is LXD?
+
+LXD is a management daemon for LXC containers (a.k.a. Linux-native
+containers).  An LXC container is a chroot on steroids: extra
+namespace isolation.
+
+See https://linuxcontainers.org/lxd/
+
+Note: all commands that start with =lxc-= (e.g. =lxc-create=) belong
+to the original LXC.  This is the older containerization suite.  LXD
+supersedes it.
+
+Put another way: LXD is to LXC as Libvirt is to QEMU.
+
+* What is LXD not?
+
++ Full virtualization.  A guest does not have a kernel!  If you want
+  to run Windows, BSD, or something else, then use libvirt and
+  virt-manager.
++ Application-specific containers (i.e. Docker, Kubernetes-like, CNCF,
+  or alphabet soup compliant)
+
+* Why LXD?
+
++ Lightweight “virtualization”: guest has a full userspace but no
+  kernel.  The host kernel is shared.
++ Use cases: dev, testing, any time you don’t want to pollute your
+  host with extra junk.
+
+* LXD versus Docker
+
+| LXD                            | Docker                      |
+|--------------------------------+-----------------------------|
+| Entire system                  | Single application          |
+| Treat each instance like a VM  | Each instance is expendable |
+| Flexible, do whatever you want | Steps must be reproducible  |
+| Full network stack             | Port forwarding             |
+
+* Installing LXD
+
+#+begin_src sh
+  # (as root)
+  snap install lxd
+  lxd
+  # (Answer questions)
+  usermod -a -G lxd <user>
+  # Log out and log back in
+#+end_src
+
+Guides:
+
++ https://ubuntu.com/server/docs/containers-lxd
++ https://linuxcontainers.org/lxd/docs/master/
++ https://linuxcontainers.org/lxd/getting-started-cli/
++ https://linuxcontainers.org/lxd/advanced-guide/
+
+* Basic usage
+
+#+begin_src sh
+  # List instances
+  lxc ls
+
+  # List local images
+  lxc image ls
+
+  # Look for a remote image
+  lxc image ls ubuntu:impish
+  lxc image ls ubuntu:impish -c lLfpdatsu
+
+  # Launch an instance
+  lxc launch ubuntu:impish i1
+
+  # Get a shell
+  lxc shell i1
+  lxc exec i1 -- su -l
+
+  # Stop and remove the instance
+  lxc stop i1
+  lxc rm i1
+#+end_src
+
+* Exploring the container environment
+
+#+begin_src sh
+  lxc shell i1
+  ps -efH
+  ip a
+  cat /proc/self/uid_map
+  cat /proc/self/gid_map
+#+end_src
+
+Compare the process table to the process table on the host.
+
++ PID namespacing
++ Network namespacing
++ UID and GID namespacing -> *Docker does not do this!*
++ See
+  https://github.com/saschagrunert/demystifying-containers/blob/master/part1-kernel-space/post.md
+
+* Tips and tricks
+
+#+begin_src sh
+  # Default sources
+  lxc remote ls
+
+  # If you prefer to copy images manually like I do
+  lxc image cp ubuntu:impish local: --auto-update --copy-aliases
+  lxc launch impish i1
+
+  # If you prefer to init and launch in a separate step
+  lxc init impish i1
+  lxc start i1
+
+  # You can watch the console while starting up.
+  # Press <ctrl>+a q to detach.
+  lxc start --console i1
+#+end_src
+
+* Different Linuxes
+
+Try another distro.
+
+#+begin_src sh
+  lxc image cp images:alpine/3.15 local: --auto-update --copy-aliases
+  lxc launch alpine a1
+  lxc shell a1
+  # Look at the environment like before
+#+end_src
+
+* Copying Files
+
+** LXD-native way
+
+#+begin_src sh
+  lxc file pull i1/etc/hosts .
+  lxc file push hosts i1/etc/hosts
+#+end_src
+
+** SCP
+
+#+begin_src sh
+  # On host
+  chmod o+x ~
+  cat ~/.ssh/id_rsa.pub
+  lxc shell i1
+
+  # In container,
+  # Create authorized_keys file if it doesn’t exist
+  cd
+  mkdir .ssh
+  touch .ssh/authorized_keys
+  chmod 700 .ssh
+  chmod 600 .ssh/authorized_keys
+
+  # Install ssh key fingerprint
+  cat >> .ssh/authorized_keys
+  # (Paste in your fingerprint)
+  # <Ctrl+d>
+  exit
+
+  # From host
+  lxc ls
+  ssh root@192.168.133.252
+  exit
+
+  # Copy something (from host to container)
+  scp lxd-demo.org root@192.168.133.252:
+  rsync -rvlt ./ root@192.168.133.252:work/
+
+  # Cleanup
+  ssh root@192.168.133.252 rm -rf lxd-demo.org work/
+#+end_src
+
+* Mounting host data
+
+** SSHFS
+
+#+begin_src sh
+  # On host
+  ssh-keygen
+  cat ~/.ssh/id_rsa.pub
+  cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+  chmod 700 ~/.ssh/authorized_keys
+
+  lxc shell i1
+
+  # In container
+  apt install sshfs
+
+  # Install ssh key fingerprint
+  cat >> .ssh/authorized_keys
+  # (Paste in your fingerprint)
+  # <Ctrl+d>
+  exit
+
+  # On host
+  lxc ls
+  ip a sh virbr0
+  ssh root@192.168.133.252 -A
+
+  # In container
+  sshfs kyle@192.168.133.1:git/oclug/lxd-demo work
+
+  # The directory is writable
+  cd work
+  touch foo
+  ls -al
+  rm foo
+
+  # Unmount
+  cd
+  fusermount -u work
+  exit
+#+end_src
+
+** LXD-native disk
+
+For this demo, we will run Apache and mount a simple website to
+=/var/www/html=.
+
+#+begin_src sh
+  lxc launch ubuntu:impish apache
+  lxc ls
+  lxc shell apache
+
+  # In container
+  apt update && apt dist-upgrade && apt autoremove --purge
+  apt install apache2
+  cd /var/www/html
+  ls -al
+  ip a
+  exit
+
+  # Point your web browser to the container’s IP address.
+
+  # On host
+  chmod o+x ~
+  # lxc config device add <container> <share_name> disk source=<src_path> path=<dest_path>
+  lxc config device add apache html disk source=/home/kyle/git/oclug/lxd-demo/site path=/var/www/html
+
+  lxc shell apache
+
+  # In container
+  cd /var/www/html
+  ls -al
+  systemctl restart apache2
+
+  # Refresh your web browser.
+
+  # Try to create a file in the shared mount
+  touch foo
+  # Permission denied!
+  exit
+#+end_src
+
+** LXD-native disk: fixing permissions
+
+Let’s pass an unprivileged user through to the container.
+
+#+begin_src sh
+  # On host
+  id
+  lxc config set apache raw.idmap 'both 2290 2290'
+  lxc restart apache
+
+  lxc shell apache
+
+  # In container
+  cat /proc/self/uid_map
+  groupadd -g 2290 kyle
+  useradd -m -g kyle -u 2290 -s /bin/bash kyle
+
+  cd /var/www/html
+  touch foo
+  # Check permissions on guest and host
+  rm foo
+
+  exit
+
+  lxc exec apache -- su -l kyle
+
+  # In container as unprivileged user kyle
+  cd /var/www/html
+  touch foo
+  # Check permissions on guest and host.  The uid is the same.
+  rm foo
+  exit
+#+end_src
+
+* YAML for everything
+
+LXD uses YAML metadata for everything, which can be edited in a text
+editor.
+
+#+begin_src sh
+  # On host
+  lxc config show apache
+  export EDITOR=vi
+  lxc config edit apache
+#+end_src
+
+* Creating a custom image
+
+#+begin_src sh
+  # From an existing image
+  lxc publish apache --alias apache
+  lxc image export apache
+
+  # Look inside
+  unsquashfs -l *.squashfs | less
+  tar -tvf meta-*.tar.xz
+  tar -xf meta-*.tar.xz metadata.yaml -O
+#+end_src
+
+To build an image from scratch, you need a rootfs tarball and a
+metadata tarball.  (Many distributions supply a rootfs.  In Ubuntu and
+Debian, you can use debootstrap to create a minimal rootfs.)  See
+
++ https://stgraber.org/2016/03/30/lxd-2-0-image-management-512/
++ https://ubuntu.com/tutorials/create-custom-lxd-images
++ https://discourse.ubuntu.com/t/creating-custom-lxd-images/13970
+
+There is an additional tool called distrobuilder to help with the
+process.
+
++ https://linuxcontainers.org/distrobuilder/introduction/
++ https://github.com/lxc/distrobuilder
+
+* Profiles
+
+#+begin_src sh
+  lxc profile ls
+  lxc profile create custom
+  lxc profile edit custom
+
+  # I have a bunch of nice ones setup
+  lxc profile show default
+  lxc profile show home_kyle
+  lxc profile show d1
+  lxc profile show cloud
+
+  # Using a profile
+  lxc launch --console impish i2 -p default -p cloud -p home_kyle
+  lxc ls
+  ssh 192.168.133.35
+
+  # In the container
+  sudo apt update && sudo apt dist-upgrade && sudo apt autoremove --purge
+  sudo apt install apache2
+  cd /var/www
+  mv html html.old
+  sudo ln -s /mnt/home/kyle/git/oclug/lxd-demo/site html
+
+  # Point your web browser to the container’s IP address.
+#+end_src
+
+=home_kyle=
+#+begin_src yaml
+  config:
+    raw.idmap: both 2290 2290
+  description: Mount /home/kyle on /mnt/home/kyle
+  devices:
+    home_kyle:
+      path: /mnt/home/kyle
+      source: /home/kyle
+      type: disk
+  name: home_kyle
+  used_by: []
+#+end_src
+
+=d1=
+#+begin_src yaml
+  config:
+    raw.idmap: both 2290 2290
+  description: Mount d1 on /mnt/d1
+  devices:
+    d1:
+      path: /mnt/d1
+      source: /mnt/d1
+      type: disk
+  name: d1
+  used_by: []
+#+end_src
+
+=cloud=
+#+begin_src sh
+  config:
+    user.user-data: |
+      #cloud-config
+      groups:
+        - kyle
+      users:
+        - name: root
+          ssh_authorized_keys:
+            - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDCBrnrrE1v+I8BaH5e5hiD7f6YULmlv1RhRsXjP9najjmqCUgJq0DqBKq1pjmWkwkgZN4WdbLkOyF42HBGbWBIbX07vIuPZ6kV/s+EGcJghVg1Q0E09t4evceyfNsqOnxzc0dBDL2KkwQZqCYhTBaS/C0I7D7eObou53NntUAaFjpoUAAZMx8MfFhyxiocvQ9G1Qi2HiHiZq+nXWBhs/6TB1PwwUWpOjxvuLW4xoBIj5u4QkJJEwSfO9gUqW8KGrFtvNSU9I7RzYtT0WFduJ14Gm/FpkRzCpJtHLeBHIpaXqkd5M2WSruqw/9Ok25kJwFxRHWh+Fk5Mv6+ZKyWRB5Pu60l85QXiMbwbh6z72wwD3SazkxGApIVYDBbUnnLej5C72yUMmX9BHcdGo3x1hef96ykuzeUHBe8GQKWQvx3DWtr2/w0KQelhJR9dDjwoiRyivQxXrLLszhLdyQAc5yWl1mmq4QwSek1oldqbB3j74J12brQUU27azYn7uvqRqM= kyle@didacus
+            - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDaV+1zV6LAqW+0p4ZIg8x7XgjIdsVjnWcuQYC0H5RV8eNjV+HseQAgWCGH/JDev1tZcSeSROeCGO2HItxr2bp3j3VQa26pUHQEYxyR+JAgxYkbh66C74boHNyBlaJxvNHE528ghYd1Ggybvcg0qF8l0UtG8noJxVCuofrN9OQFpXHsIsMQSZgMyu7dEwW8W0MvoDTN35fgKdfVb6RQS//oaiftbsM+xeF81QAuvry2ajtH7Lqr9KlS9qAHqCHBFu8zIsC+RtXZfBe5jlbHIKf4U6h1dAkwD9hkjoTmGRXjI3RrNKJlLM3MNYgYM7bpP6fvGk0hG+uBQknWug2rS1CBum1zp2/iozkvImbSUz5xCqPQD9Um4APjfKX8q0bAlWGHtU6F/FMzkzrNZBtaHmvjf6gn+EUvi8iTnr2Kw3Esu3neAiDTFw6K8zgmqa1KvVXJrQFrrSJd/Zghe0Gl9B/IC0iFodZK4kZRu35D9hVNGTUa1h7EQSihGpFfXasg/Ms= kyle@gemma
+        - name: kyle
+          gecos: Kyle Terrien
+          primary_group: kyle
+          groups: adm,cdrom,sudo,dip,plugdev,lxd
+          shell: /bin/bash
+          sudo: ALL=(ALL) NOPASSWD:ALL
+          ssh_authorized_keys:
+            - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDCBrnrrE1v+I8BaH5e5hiD7f6YULmlv1RhRsXjP9najjmqCUgJq0DqBKq1pjmWkwkgZN4WdbLkOyF42HBGbWBIbX07vIuPZ6kV/s+EGcJghVg1Q0E09t4evceyfNsqOnxzc0dBDL2KkwQZqCYhTBaS/C0I7D7eObou53NntUAaFjpoUAAZMx8MfFhyxiocvQ9G1Qi2HiHiZq+nXWBhs/6TB1PwwUWpOjxvuLW4xoBIj5u4QkJJEwSfO9gUqW8KGrFtvNSU9I7RzYtT0WFduJ14Gm/FpkRzCpJtHLeBHIpaXqkd5M2WSruqw/9Ok25kJwFxRHWh+Fk5Mv6+ZKyWRB5Pu60l85QXiMbwbh6z72wwD3SazkxGApIVYDBbUnnLej5C72yUMmX9BHcdGo3x1hef96ykuzeUHBe8GQKWQvx3DWtr2/w0KQelhJR9dDjwoiRyivQxXrLLszhLdyQAc5yWl1mmq4QwSek1oldqbB3j74J12brQUU27azYn7uvqRqM= kyle@didacus
+            - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDaV+1zV6LAqW+0p4ZIg8x7XgjIdsVjnWcuQYC0H5RV8eNjV+HseQAgWCGH/JDev1tZcSeSROeCGO2HItxr2bp3j3VQa26pUHQEYxyR+JAgxYkbh66C74boHNyBlaJxvNHE528ghYd1Ggybvcg0qF8l0UtG8noJxVCuofrN9OQFpXHsIsMQSZgMyu7dEwW8W0MvoDTN35fgKdfVb6RQS//oaiftbsM+xeF81QAuvry2ajtH7Lqr9KlS9qAHqCHBFu8zIsC+RtXZfBe5jlbHIKf4U6h1dAkwD9hkjoTmGRXjI3RrNKJlLM3MNYgYM7bpP6fvGk0hG+uBQknWug2rS1CBum1zp2/iozkvImbSUz5xCqPQD9Um4APjfKX8q0bAlWGHtU6F/FMzkzrNZBtaHmvjf6gn+EUvi8iTnr2Kw3Esu3neAiDTFw6K8zgmqa1KvVXJrQFrrSJd/Zghe0Gl9B/IC0iFodZK4kZRu35D9hVNGTUa1h7EQSihGpFfXasg/Ms= kyle@gemma
+      runcmd:
+        - usermod -u 2290 kyle
+        - groupmod -g 2290 kyle
+        - chown -R kyle.kyle /home/kyle
+  description: Authorize SSH keys for ‘root’ and ‘kyle’ users
+  devices: {}
+  name: cloud
+  used_by: []
+#+end_src
+
+* Real-world example: Web server on Rocky Linux 8
+
+What if you need to develop or test on a different distro than the one
+you have?  LXD to the rescue!
+
+#+begin_src sh
+  lxc launch --console images:rockylinux/8/cloud webdev -p default -p cloud -p d1
+  # <ctrl>+a q to detach
+
+  lxc shell webdev
+  # In the container
+  dnf distro-sync
+  dnf install httpd
+  systemctl enable httpd
+  systemctl start httpd
+  systemctl status httpd
+
+  # Point your web browser to the container’s IP address.
+
+  # Still in the container
+  cd /var/www
+  mv html html.old
+  ln -s /mnt/d1/kyle/git/web/oclug-www/html html
+
+  # Refresh your web browser.
+
+  exit
+#+end_src
+
+* Compare to Docker
+
+#+begin_src sh
+  cd /mnt/d1/kyle/git/web/oclug-www/html
+  docker run -dit --name webdev -p 8080:80 -v "$PWD":/usr/local/apache2/htdocs/ httpd:2.4
+
+  # Point your web browser to http://localhost:8080/
+#+end_src
+
+Eek!  Where did that command come from?
+https://hub.docker.com/_/httpd
+
+Let’s peek inside.
+
+#+begin_src sh
+  docker exec -it webdev su -
+  cat /etc/os-release
+  # None of these commands are found
+  ps -efH
+  ip a
+  ss -tulpn
+  netstat -tulpn
+  man httpd
+#+end_src
+
+Troubleshooting?  Good luck!
+
+Emphasis: a Docker container is a gray box.  You are dependent on the
+upstream developer.
+
+* Conclusion
+
++ Get 90% of the benefits of virtualization with a fraction of the
+  overhead.
++ Unlike application containers, LXD containers are fully-featured.

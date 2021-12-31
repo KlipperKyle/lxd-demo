@@ -1,0 +1,11 @@
+
+4 LXD versus Docker
+===================
+
+   LXD                             Docker                      
+  -------------------------------------------------------------
+   Entire system                   Single application          
+   Treat each instance like a VM   Each instance is expendable 
+   Flexible, do whatever you want  Steps must be reproducible  
+   Full network stack              Port forwarding             
+
