@@ -223,9 +223,6 @@ Try another distro.
 
 ** LXD-native disk
 
-For this demo, we will run Apache and mount a simple website to
-=/var/www/html=.
-
 #+begin_src sh
   # On host
   chmod o+x ~
