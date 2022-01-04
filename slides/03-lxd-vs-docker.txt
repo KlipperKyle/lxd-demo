@@ -1,5 +1,5 @@
 
-4 LXD versus Docker
+3 LXD versus Docker
 ===================
 
    LXD                             Docker                      

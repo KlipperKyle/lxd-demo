@@ -1,7 +1,8 @@
 
-3 Why LXD?
+2 Why LXD?
 ==========
 
+  + Trying out another distro?
   + Lightweight “virtualization”: guest has a full userspace but no
     kernel.  The host kernel is shared.
   + Use cases: dev, testing, any time you don’t want to pollute your
