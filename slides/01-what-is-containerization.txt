@@ -1,0 +1,21 @@
+
+1 What is containerization?
+===========================
+
+  Lightweight virtualization
+
+  + `chroot' -> change root of filesystem
+  + `unshare' -> namespaces
+    1. Mount (mnt)
+    2. UNIX Time-sharing System (uts)
+    3. Interprocess Communication (ipc)
+    4. Process ID (pid)
+    5. Network (net)
+    6. User ID (user)
+    7. Control Group (cgroup)
+
+  <https://github.com/saschagrunert/demystifying-containers/blob/master/part1-kernel-space/post.md>
+
+  Tools for LXC containers: `lxc-create', `lxc-start', `lxc-info',
+  `lxc-attach', `lxc-stop', `lxc-destroy'
+

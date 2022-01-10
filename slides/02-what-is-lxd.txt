@@ -1,0 +1,11 @@
+
+2 What is LXD?
+==============
+
+  LXD is a management daemon for LXC containers (a.k.a. Linux-native
+  containers).
+
+  See <https://linuxcontainers.org/lxd/>
+
+  Put another way: LXD is to LXC as Libvirt is to QEMU.
+

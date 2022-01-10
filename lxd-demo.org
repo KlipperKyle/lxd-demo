@@ -3,44 +3,56 @@
 #+author: Kyle Terrien
 #+options: ^:{}
 
+* What is containerization?
+
+Lightweight virtualization
+
++ =chroot= -> change root of filesystem
++ =unshare= -> namespaces
+  1. Mount (mnt)
+  2. UNIX Time-sharing System (uts)
+  3. Interprocess Communication (ipc)
+  4. Process ID (pid)
+  5. Network (net)
+  6. User ID (user)
+  7. Control Group (cgroup)
+
+https://github.com/saschagrunert/demystifying-containers/blob/master/part1-kernel-space/post.md
+
+Tools for LXC containers: =lxc-create=, =lxc-start=, =lxc-info=,
+=lxc-attach=, =lxc-stop=, =lxc-destroy=
+
 * What is LXD?
 
 LXD is a management daemon for LXC containers (a.k.a. Linux-native
-containers).  An LXC container is a chroot on steroids: extra
-namespace isolation.
+containers).
 
 See https://linuxcontainers.org/lxd/
-
-Note: all commands that start with =lxc-= (e.g. =lxc-create=) belong
-to the original LXC.  This is the older containerization suite.  LXD
-supersedes it.
 
 Put another way: LXD is to LXC as Libvirt is to QEMU.
 
 * Why LXD?
 
-+ Trying out another distro?
-+ Lightweight “virtualization”: guest has a full userspace but no
-  kernel.  The host kernel is shared.
-+ Use cases: dev, testing, any time you don’t want to pollute your
-  host with extra junk.
++ Performance benefit: guest has a full userspace but no kernel.
+  Container processes are scheduled just like host processes.
++ Use cases: dev, testing, isolating an application.
 
 * LXD versus Docker
 
-| LXD                            | Docker                      |
-|--------------------------------+-----------------------------|
-| Entire system                  | Single application          |
-| Treat each instance like a VM  | Each instance is expendable |
-| Flexible, do whatever you want | Steps must be reproducible  |
-| Full network stack             | Port forwarding             |
+| LXD                           | Docker                     |
+|-------------------------------+----------------------------|
+| Entire system                 | Single application         |
+| Each container is independent | Layers, layers everywhere! |
+| Full network stack (plus SSH) | Port forwarding            |
 
 * What is LXD not?
 
-+ It is not full virtualization.  A guest does not have a kernel!  If
-  you want to run Windows, BSD, or something else, then use libvirt
-  and virt-manager.
-+ It is not for application-specific containers (i.e. Docker,
-  Kubernetes-like, CNCF, or alphabet soup compliant)
++ LXD is not full virtualization.  If you need to run something other
+  than Linux (e.g. Windows, BSD, or Plan 9), then use libvirt and
+  virt-manager.
++ LXD is not for application-specific containers (i.e. Docker,
+  Kubernetes-like, CNCF, or alphabet soup compliant).  If you don’t
+  have =/sbin/init=, then LXD will complain.
 
 * Installing LXD
 
@@ -144,82 +156,10 @@ Try another distro.
   lxc file push hosts a1/etc/hosts
 #+end_src
 
-** SCP
-
-#+begin_src sh
-  # On host
-  ssh-keygen
-  cat ~/.ssh/id_rsa.pub
-  lxc shell i1
-
-  # In container,
-  # Create authorized_keys file if it doesn’t exist
-  cd
-  mkdir .ssh
-  touch .ssh/authorized_keys
-  chmod 700 .ssh
-  chmod 600 .ssh/authorized_keys
-
-  # Install ssh key fingerprint
-  cat >> .ssh/authorized_keys
-  # (Paste in your fingerprint)
-  # <Ctrl+d>
-  exit
-
-  # From host
-  lxc ls
-  ssh root@192.168.133.252
-  exit
-
-  # Copy something (from host to container)
-  scp lxd-demo.org root@192.168.133.252:
-  rsync -rvlt ./ root@192.168.133.252:work/
-
-  # Cleanup
-  ssh root@192.168.133.252 rm -rf lxd-demo.org work/
-#+end_src
++ You can also use =scp=, =rsync=, and =sshfs= because most containers
+  have SSH running.  (Hint: use SSH keys.)
 
 * Mounting host data
-
-** SSHFS
-
-#+begin_src sh
-  # On host
-  ssh-keygen
-  cat ~/.ssh/id_rsa.pub
-  cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
-  chmod 700 ~/.ssh/authorized_keys
-
-  lxc shell i1
-
-  # In container
-  apt install sshfs
-
-  # Install ssh key fingerprint
-  cat >> .ssh/authorized_keys
-  # (Paste in your fingerprint)
-  # <Ctrl+d>
-  exit
-
-  # On host
-  lxc ls
-  ip a sh lxdbr0
-  ssh root@192.168.133.252 -A
-
-  # In container
-  sshfs kyle@192.168.133.1:git/oclug/lxd-demo work
-
-  # The directory is writable
-  cd work
-  touch foo
-  ls -al
-  rm foo
-
-  # Unmount
-  cd
-  fusermount -u work
-  exit
-#+end_src
 
 ** LXD-native disk
 
@@ -291,8 +231,8 @@ editor.
 
 #+begin_src sh
   # From an existing image
-  lxc publish apache --alias i1
-  lxc image export i1
+  lxc publish i1 --alias mycustom
+  lxc image export mycustom
   lxc image export impish
 
   # Look inside
@@ -303,7 +243,7 @@ editor.
 
 To build an image from scratch, you need a rootfs tarball and a
 metadata tarball.  (Many distributions supply a rootfs.  In Ubuntu and
-Debian, you can use debootstrap to create a minimal rootfs.)  See
+Debian, you can use =debootstrap= to create a minimal rootfs.)  See
 
 + https://stgraber.org/2016/03/30/lxd-2-0-image-management-512/
 + https://ubuntu.com/tutorials/create-custom-lxd-images
@@ -395,6 +335,8 @@ containers.
   name: cloud
   used_by: []
 #+end_src
+
+See https://cloudinit.readthedocs.io/en/latest/topics/examples.html
 
 * Real-world example: OCLUG web development
 

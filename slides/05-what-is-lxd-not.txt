@@ -1,0 +1,11 @@
+
+5 What is LXD not?
+==================
+
+  + LXD is not full virtualization.  If you need to run something other
+    than Linux (e.g. Windows, BSD, or Plan 9), then use libvirt and
+    virt-manager.
+  + LXD is not for application-specific containers (i.e. Docker,
+    Kubernetes-like, CNCF, or alphabet soup compliant).  If you don’t
+    have `/sbin/init', then LXD will complain.
+

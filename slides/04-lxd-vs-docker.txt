@@ -1,0 +1,10 @@
+
+4 LXD versus Docker
+===================
+
+   LXD                            Docker                     
+  -----------------------------------------------------------
+   Entire system                  Single application         
+   Each container is independent  Layers, layers everywhere! 
+   Full network stack (plus SSH)  Port forwarding            
+

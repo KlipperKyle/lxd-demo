@@ -1,0 +1,8 @@
+
+3 Why LXD?
+==========
+
+  + Performance benefit: guest has a full userspace but no kernel.
+    Container processes are scheduled just like host processes.
+  + Use cases: dev, testing, isolating an application.
+
