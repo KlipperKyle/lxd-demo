@@ -1,5 +1,6 @@
 #+title: lxd-demo
 
-Demo of LXD containerization for the Orange County Linux User Group
+Demo of LXD containerization for the Orange County Linux User Group,
+given on [2022-01-15 Sat].
 
 See [[file:lxd-demo.org][lxd-demo.org]]
