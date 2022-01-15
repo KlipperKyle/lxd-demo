@@ -198,7 +198,7 @@ Let’s pass an unprivileged user through to the container.
   groupadd -g 2290 kyle
   useradd -m -g kyle -u 2290 -s /bin/bash kyle
 
-  cd /var/www/html
+  cd /mnt/work
   touch foo
   # Check permissions on guest and host
   rm foo
@@ -390,6 +390,10 @@ Let’s peek inside.
   ss -tulpn
   netstat -tulpn
   man httpd
+
+  # Install ps
+  apt update
+  apt install procps
 
   # What does this do?
   cd /usr/local/apache2/htdocs
